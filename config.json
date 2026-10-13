@@ -1,0 +1,26 @@
+{
+  "General": {
+    "CsvDelimiter": ";",
+    "RetryCount": 2,
+    "RetryDelaySeconds": 2,
+    "FailuresBeforeAlert": 2,
+    "RepeatAlertMinutes": 60,
+    "DnsWarningMilliseconds": 1000,
+    "TcpTimeoutMilliseconds": 3000,
+    "NotificationTimeoutSeconds": 15
+  },
+  "Teams": {
+    "Enabled": false,
+    "PayloadMode": "WorkflowGeneric",
+    "WebhookEnvironmentVariable": "DNSMONITOR_TEAMS_WEBHOOK"
+  },
+  "Email": {
+    "Enabled": true,
+    "SmtpServer": "mail.dominio.com",
+    "Port": 587,
+    "UseSsl": true,
+    "From": "exemplo@dominio.com.br",
+    "DefaultRecipients": ["exemplo@dominio.com.br"],
+    "CredentialFile": "smtp-credential.xml"
+  }
+}

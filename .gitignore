@@ -1,0 +1,44 @@
+# ==========================================
+# Arquivos Temporários e Logs do PowerShell
+# ==========================================
+# Histórico de comandos locais da sessão do PS
+.ps_history
+# Arquivos de log e relatórios de erro gerados por scripts
+*.log
+*.tmp
+*.err
+
+# ==========================================
+# Módulos e Dependências (Instalados localmente)
+# ==========================================
+# Se você baixa módulos localmente em vez de usar o repositório central
+/Modules/
+# Pastas de saída de build de módulos (caso crie módulos)
+/output/
+/bin/
+/obj/
+
+# ==========================================
+# Configurações do VS Code (Editor mais comum para PS)
+# ==========================================
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# ==========================================
+# Segredos e Dados Sensíveis (NUNCA envie ao Git)
+# ==========================================
+*.ps1xml
+# Arquivos que guardam credenciais exportadas por scripts
+*.clixml
+*.pfx
+*.cer
+.env
+
+# ==========================================
+# Testes (Pester)
+# ==========================================
+# Resultados de testes gerados pelo framework Pester
+TestResults/
+*.code-coverage
+smtp-credential.xml
