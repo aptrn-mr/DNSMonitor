@@ -1,2 +1,2 @@
-Enabled;Hostname;ExpectedIPs;DnsServer;ComparisonMode;Port;ResponsibleEmails;Team
-true;localhost;127.0.0.1;;Exact;0;exemplo@dominio.com;Infraestrutura
+Enabled;Hostname;ExpectedIPs;DnsServer;ComparisonMode;Port;http;LatencyWarningMilliseconds;ResponsibleEmails;Team
+true;localhost;127.0.0.1;;Exact;0;false;200;exemplo@dominio.com;Infraestrutura
