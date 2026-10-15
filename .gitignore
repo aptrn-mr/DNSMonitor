@@ -7,6 +7,8 @@
 *.log
 *.tmp
 *.err
+# Pasta de logs e estado em tempo de execução do Monitor DNS
+/runtime/
 
 # ==========================================
 # Módulos e Dependências (Instalados localmente)
@@ -34,6 +36,7 @@
 *.pfx
 *.cer
 .env
+smtp-credential.xml
 
 # ==========================================
 # Testes (Pester)
@@ -41,4 +44,3 @@
 # Resultados de testes gerados pelo framework Pester
 TestResults/
 *.code-coverage
-smtp-credential.xml
