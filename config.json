@@ -3,9 +3,9 @@
     "CsvDelimiter": ";",
     "RetryCount": 2,
     "RetryDelaySeconds": 2,
-    "FailuresBeforeAlert": 2,
+    "FailuresBeforeAlert": 1,
     "RepeatAlertMinutes": 60,
-    "DnsWarningMilliseconds": 1000,
+    "LatencyWarningMilliseconds": 200,
     "TcpTimeoutMilliseconds": 3000,
     "NotificationTimeoutSeconds": 15
   },
@@ -19,8 +19,8 @@
     "SmtpServer": "mail.dominio.com",
     "Port": 587,
     "UseSsl": true,
-    "From": "exemplo@dominio.com.br",
-    "DefaultRecipients": ["exemplo@dominio.com.br"],
+    "From": "exemplo@dominio.com",
+    "DefaultRecipients": ["exemplo@dominio.com"],
     "CredentialFile": "smtp-credential.xml"
   }
 }
