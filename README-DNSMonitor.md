@@ -32,7 +32,7 @@ Configura as notificações para Teams/Workflows:
 | Propriedade | O que é e para que serve | Como configurar |
 |---|---|---|
 | `Enabled` | Liga ou desliga o envio para Teams. | Use `true` para habilitar ou `false` para desabilitar. |
-| `PayloadMode` | Formato JSON enviado ao webhook. | Use `WorkflowGeneric` para enviar os campos `title`, `severity`, `message`, `timestamp`, `source` e `facts`. Qualquer outro valor seleciona o formato de texto simples (`text`). |
+| `PayloadMode` | Formato JSON enviado ao webhook. | Use `AdaptiveCard` para enviar um cartão Adaptive Card pronto para a ação “Post card in a chat or channel”; `WorkflowGeneric` para enviar os campos `title`, `severity`, `message`, `timestamp`, `source` e `facts`; ou `Text` para enviar uma mensagem de texto simples. |
 | `WebhookEnvironmentVariable` | Nome da variável de ambiente que contém a URL secreta do webhook. | Informe o nome da variável, não a URL. O padrão é `DNSMONITOR_TEAMS_WEBHOOK`. Defina a URL no escopo `User` ou `Machine`; não a grave no JSON nem no repositório. |
 
 ### `Email`
@@ -56,7 +56,9 @@ Configura as notificações por e-mail:
 4. Consulte `runtime\history_YYYYMM.csv`, `runtime\monitor_YYYYMMDD.log` e `runtime\state.xml`.
 
 ## Teams
-Crie no Teams/Workflows um fluxo com o gatilho de webhook e uma ação para publicar no canal. O modo `WorkflowGeneric` envia: `title`, `severity`, `message`, `timestamp`, `source` e `facts`.
+Crie no Teams/Workflows um fluxo com o gatilho de webhook e uma ação **Post card in a chat or channel** como o modelo `Enviar alertas de webhook para um canal`. Configure `Teams.PayloadMode` como `AdaptiveCard` para o script enviar diretamente um objeto Adaptive Card com `type: "AdaptiveCard"`, versão `1.4`, título, mensagem, severidade, origem, horário e os fatos do monitor. Na ação do Teams, use o corpo recebido pelo gatilho como conteúdo do cartão; não envolva novamente o objeto em uma propriedade `text` ou em outra estrutura.
+
+Os modos `WorkflowGeneric` (campos `title`, `severity`, `message`, `timestamp`, `source` e `facts`) e `Text` (mensagem simples) continuam disponíveis para fluxos configurados para esses formatos.
 Grave a URL sem colocá-la no arquivo:
 `[Environment]::SetEnvironmentVariable('DNSMONITOR_TEAMS_WEBHOOK','COLE_A_URL','User')`
 Depois altere `Teams.Enabled` para `true`. Para tarefa executada por conta de serviço, crie a variável no escopo `Machine` ou sob a própria conta.

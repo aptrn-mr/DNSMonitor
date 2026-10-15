@@ -10,8 +10,8 @@
     "NotificationTimeoutSeconds": 15
   },
   "Teams": {
-    "Enabled": false,
-    "PayloadMode": "WorkflowGeneric",
+    "Enabled": true,
+    "PayloadMode": "AdaptiveCard",
     "WebhookEnvironmentVariable": "DNSMONITOR_TEAMS_WEBHOOK"
   },
   "Email": {

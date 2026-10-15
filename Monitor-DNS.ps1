@@ -155,18 +155,66 @@ function Send-TeamsAlert {
         throw "Variavel de ambiente $($script:Config.Teams.WebhookEnvironmentVariable) nao definida." 
     }
 
-    if ($script:Config.Teams.PayloadMode -eq 'WorkflowGeneric') {
-        $payload = [ordered]@{ 
-            title=$Title; 
-            severity=$Severity; 
-            message=$Message; 
-            timestamp=(Get-Date).ToString('o'); 
-            source=$env:COMPUTERNAME; 
-            facts=$Facts 
+    switch ($script:Config.Teams.PayloadMode) {
+        'AdaptiveCard' {
+            $cardFacts = @(
+                [ordered]@{ title='Severidade'; value=$Severity }
+                [ordered]@{ title='Origem'; value=$env:COMPUTERNAME }
+                [ordered]@{ title='Executado em'; value=(Get-Date).ToString('o') }
+            )
+            $cardFacts += @(
+                $Facts.GetEnumerator() |
+                    Sort-Object Name |
+                    ForEach-Object {
+                        [ordered]@{
+                            title=[string]$_.Name
+                            value=if ($null -eq $_.Value -or [string]::IsNullOrWhiteSpace([string]$_.Value)) { '-' } else { [string]$_.Value }
+                        }
+                    }
+            )
+            $severityColor = if ($Severity -eq $script:Severity['Critical']) { 'Attention' } else { 'Good' }
+            $payload = [ordered]@{
+                '$schema' = 'http://adaptivecards.io/schemas/adaptive-card.json'
+                type = 'AdaptiveCard'
+                version = '1.4'
+                body = @(
+                    [ordered]@{
+                        type = 'TextBlock'
+                        text = $Title
+                        weight = 'Bolder'
+                        size = 'Large'
+                        color = $severityColor
+                        wrap = $true
+                    }
+                    [ordered]@{
+                        type = 'TextBlock'
+                        text = $Message
+                        wrap = $true
+                    }
+                    [ordered]@{
+                        type = 'FactSet'
+                        facts = $cardFacts
+                    }
+                )
+            }
         }
-    } else {
-        $factText = ($Facts.GetEnumerator() | Sort-Object Name | ForEach-Object { "**$($_.Name):** $($_.Value)" }) -join "`n`n"
-        $payload = @{ text = "**$Title**`n`n$Message`n`n$factText" }
+        'WorkflowGeneric' {
+            $payload = [ordered]@{
+                title=$Title
+                severity=$Severity
+                message=$Message
+                timestamp=(Get-Date).ToString('o')
+                source=$env:COMPUTERNAME
+                facts=$Facts
+            }
+        }
+        'Text' {
+            $factText = ($Facts.GetEnumerator() | Sort-Object Name | ForEach-Object { "**$($_.Name):** $($_.Value)" }) -join "`n`n"
+            $payload = @{ text = "**$Title**`n`n$Message`n`n$factText" }
+        }
+        default {
+            throw "PayloadMode do Teams invalido: '$($script:Config.Teams.PayloadMode)'. Use AdaptiveCard, WorkflowGeneric ou Text."
+        }
     }
 
     $json = $payload | ConvertTo-Json -Depth 10
