@@ -158,9 +158,18 @@ function Send-TeamsAlert {
     switch ($script:Config.Teams.PayloadMode) {
         'AdaptiveCard' {
             $cardFacts = @(
-                [ordered]@{ title='Severidade'; value=$Severity }
-                [ordered]@{ title='Origem'; value=$env:COMPUTERNAME }
-                [ordered]@{ title='Executado em'; value=(Get-Date).ToString('o') }
+                [ordered]@{
+                    title='Severidade'
+                    value=$Severity
+                }
+                [ordered]@{
+                    title='Origem'
+                    value=$env:COMPUTERNAME
+                }
+                [ordered]@{
+                    title='Executado em'
+                    value=(Get-Date).ToString('o')
+                }
             )
             $cardFacts += @(
                 $Facts.GetEnumerator() |
@@ -229,22 +238,28 @@ function Send-EmailAlert {
     $recipients = @($To + $script:Config.Email.DefaultRecipients | Where-Object { $_ } | Sort-Object -Unique)
 
     if ((Get-CollectionCount $recipients) -eq 0) { 
-        Write-Log 'Alerta sem destinatario de e-mail.' $script:Log['Warn']; 
+        Write-Log 'Alerta sem destinatario de e-mail.' $script:Log['Warn']
         return 
     }
 
     if ($WhatIfAlerts) { 
-        Write-Log "SIMULACAO Email para $($recipients -join ', '): $Subject"; 
+        Write-Log "SIMULACAO Email para $($recipients -join ', '): $Subject"
         return 
     }
 
     $cred = Get-SmtpCredential
 
     $mailParams = @{
-        SmtpServer=$script:Config.Email.SmtpServer; Port=[int]$script:Config.Email.Port
-        UseSsl=[bool]$script:Config.Email.UseSsl; Credential=$cred
-        From=$script:Config.Email.From; To=$recipients
-        Subject=$Subject; Body=$HtmlBody; BodyAsHtml=$true; Encoding=[Text.Encoding]::UTF8
+        SmtpServer=$script:Config.Email.SmtpServer
+        Port=[int]$script:Config.Email.Port
+        UseSsl=[bool]$script:Config.Email.UseSsl
+        Credential=$cred
+        From=$script:Config.Email.From
+        To=$recipients
+        Subject=$Subject
+        Body=$HtmlBody
+        BodyAsHtml=$true
+        Encoding=[Text.Encoding]::UTF8
     }
 
     Send-MailMessage @mailParams
@@ -259,20 +274,21 @@ function Send-Notification {
     $message = if ($isRecovery) { 'O alvo voltou ao estado normal.' } else { $Result.Details }
 
     $facts = [ordered]@{
-        Hostname=$Result.Hostname;
-        Equipe=$Result.Team;
+        Hostname=$Result.Hostname
+        Equipe=$Result.Team
+        StatusDNS=$Result.DnsStatus
         DNSServer=$Result.DnsServer
-        IPsEsperados=$Result.ExpectedIPs;
+        IPsEsperados=$Result.ExpectedIPs
         IPsObtidos=$Result.ResolvedIPs
-        TempoDNSms=$Result.DnsTimeMs;
-        Porta=$Result.Port;
-        TCP=$Result.TcpStatus;
+        TempoDNSms=$Result.DnsTimeMs
+        Porta=$Result.Port
+        TCP=$Result.TcpStatus
         TempoTCPms=$Result.TcpTimeMs
         LimiteLatenciaMs=$Result.LatencyWarningMilliseconds
-        HTTP=$Result.HttpStatus;
-        URL=$Result.HttpUrl;
+        HTTP=$Result.HttpStatus
+        URL=$Result.HttpUrl
         DetalhesHTTP=$Result.HttpDetails
-        Estado=$Result.Status;
+        Estado=$Result.Status
         ExecutadoEm=$Result.Timestamp
     }
 
@@ -310,6 +326,7 @@ function Send-TestNotification {
         Hostname='teste.local'
         Team='Teste'
         DnsServer='PADRAO_DO_SISTEMA'
+        DnsStatus=$script:Status['Untested']
         ExpectedIPs='192.0.2.10'
         ResolvedIPs='192.0.2.99'
         DnsTimeMs=25
@@ -336,9 +353,9 @@ function Test-DnsTarget {
 
     try {
         $parameters = @{ 
-            Name=$Hostname; 
-            Type='A'; 
-            DnsOnly=$true; 
+            Name=$Hostname
+            Type='A'
+            DnsOnly=$true
             ErrorAction='Stop' 
         }
 
@@ -374,6 +391,15 @@ function Test-DnsTarget {
         DnsTimeMs=[math]::Round($sw.Elapsed.TotalMilliseconds,2)
         DnsError=$dnsError
     }
+}
+
+function Test-IsIpAddress {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $false }
+
+    $address = $null
+    return [Net.IPAddress]::TryParse($Value.Trim(), [ref]$address)
 }
 
 function Test-TcpPort {
@@ -417,9 +443,9 @@ function Test-TcpPort {
     }
 
     [pscustomobject]@{ 
-        Status=$status; 
-        Success=$success; 
-        TimeMs=$elapsedMilliseconds; 
+        Status=$status
+        Success=$success
+        TimeMs=$elapsedMilliseconds
         Details=$details 
     }
 }
@@ -434,12 +460,19 @@ function Test-HttpService {
 
     if ($Enabled -and $DnsResolved) {
         $portPart = if ($Port -gt 0) { ":$Port" } else { '' }
+        $uriHostname = $Hostname
+        $address = $null
+
+        if ([Net.IPAddress]::TryParse($Hostname, [ref]$address) -and $address.AddressFamily -eq [Net.Sockets.AddressFamily]::InterNetworkV6) {
+            $uriHostname = "[$Hostname]"
+        }
+
         $timeoutSeconds = [int][math]::Max(1, [math]::Ceiling([double]$script:Config.General.TcpTimeoutMilliseconds / 1000))
         $attemptDetails = @()
         $success = $false
 
         foreach ($scheme in @('https','http')) {
-            $attemptUrl = "{0}://{1}{2}/" -f $scheme, $Hostname, $portPart
+            $attemptUrl = "{0}://{1}{2}/" -f $scheme, $uriHostname, $portPart
 
             try {
                 $response = Invoke-WebRequest -Uri $attemptUrl -Method Get -TimeoutSec $timeoutSeconds -UseBasicParsing -ErrorAction Stop
@@ -477,55 +510,78 @@ function Test-HttpService {
     }
 
     [pscustomobject]@{ 
-        Status=$status; 
-        Details=$details; 
-        Url=$url; 
+        Status=$status
+        Details=$details
+        Url=$url
         Success=$success 
     }
 }
 
 function New-TargetResult {
-    param([object]$Target,[object]$DnsResult,[int]$Port,[bool]$IpOk,[object]$TcpResult,[bool]$HttpEnabled,[object]$HttpResult,[double]$LatencyWarningMilliseconds)
+    param([object]$Target,[object]$DnsResult,[bool]$DnsTested,[int]$Port,[bool]$IpOk,[object]$TcpResult,[bool]$HttpEnabled,[object]$HttpResult,[double]$LatencyWarningMilliseconds)
 
     $hostName = ([string]$Target.Hostname).Trim()
     $expected = ConvertTo-StringArray $Target.ExpectedIPs
     $dnsServer = ([string](Get-PropertyValue $Target 'DnsServer' '')).Trim()
-    $status=$script:Status['Ok']; 
+    $status=$script:Status['Ok']
     $details='Resolucao e validacoes realizadas com sucesso.'
+    $dnsStatus = $script:Status['Untested']
 
-    if ((Get-CollectionCount $DnsResult.ResolvedAddresses) -eq 0) { 
-        $status=$script:Status['DnsFailure']; 
+    if ($DnsTested) {
+        if ((Get-CollectionCount $DnsResult.ResolvedAddresses) -eq 0) {
+            $dnsStatus = $script:Status['DnsFailure']
+        } elseif ($DnsResult.DnsTimeMs -gt $LatencyWarningMilliseconds) {
+            $dnsStatus = $script:Status['DnsSlow']
+        } else {
+            $dnsStatus = $script:Status['Ok']
+        }
+    }
+
+    if ($DnsTested -and (Get-CollectionCount $DnsResult.ResolvedAddresses) -eq 0) {
+        $status=$script:Status['DnsFailure']
         $details="Falha de resolucao: $($DnsResult.DnsError)" 
     }
-    elseif (-not $IpOk) { 
-        $status=$script:Status['IpMismatch']; 
+    elseif ($DnsTested -and -not $IpOk) {
+        $status=$script:Status['IpMismatch']
         $details='O conjunto de IPs obtido diverge do baseline.' 
     }
     elseif ($TcpResult.Status -eq $script:Status['Slow']) { 
-        $status=$script:Status['TcpSlow']; 
+        $status=$script:Status['TcpSlow']
         $details=$TcpResult.Details 
     }
     elseif (-not $TcpResult.Success) { 
-        $status=$script:Status['TcpFailure']; 
+        $status=$script:Status['TcpFailure']
         $details="O DNS esta correto, mas a conexao TCP na porta $Port falhou. $($TcpResult.Details)" 
     }
     elseif (-not $HttpResult.Success) { 
-        $status=$script:Status['HttpFailure']; 
+        $status=$script:Status['HttpFailure']
         $details="O servico HTTP nao respondeu corretamente: $($HttpResult.Details)" 
     }
-    elseif ($DnsResult.DnsTimeMs -gt $LatencyWarningMilliseconds) { 
-        $status=$script:Status['DnsSlow']; 
+    elseif ($DnsTested -and $DnsResult.DnsTimeMs -gt $LatencyWarningMilliseconds) {
+        $status=$script:Status['DnsSlow']
         $details="Resolucao acima do limite de $LatencyWarningMilliseconds ms." 
     }
 
     [pscustomobject][ordered]@{
-        Timestamp=(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'); Hostname=$hostName
-        Team=(Get-PropertyValue $Target 'Team' ''); DnsServer=if($dnsServer){$dnsServer}else{'PADRAO_DO_SISTEMA'}
-        ExpectedIPs=($expected -join ';'); ResolvedIPs=if((Get-CollectionCount $DnsResult.ResolvedAddresses)){ $DnsResult.ResolvedAddresses -join ';'}else{'SEM_RESPOSTA'}
-        TTL=$DnsResult.Ttl; DnsTimeMs=$DnsResult.DnsTimeMs; Port=$Port; TcpStatus=$TcpResult.Status; TcpTimeMs=$TcpResult.TimeMs
+        Timestamp=(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+        Hostname=$hostName
+        Team=(Get-PropertyValue $Target 'Team' '')
+        DnsServer=if($dnsServer){$dnsServer}else{'PADRAO_DO_SISTEMA'}
+        DnsStatus=$dnsStatus
+        ExpectedIPs=($expected -join ';')
+        ResolvedIPs=if((Get-CollectionCount $DnsResult.ResolvedAddresses)){ $DnsResult.ResolvedAddresses -join ';'}else{'SEM_RESPOSTA'}
+        TTL=$DnsResult.Ttl
+        DnsTimeMs=$DnsResult.DnsTimeMs
+        Port=$Port
+        TcpStatus=$TcpResult.Status
+        TcpTimeMs=$TcpResult.TimeMs
         LatencyWarningMilliseconds=$LatencyWarningMilliseconds
-        HttpEnabled=$HttpEnabled; HttpUrl=$HttpResult.Url; HttpStatus=$HttpResult.Status; HttpDetails=$HttpResult.Details
-        Status=$status; Details=$details
+        HttpEnabled=$HttpEnabled
+        HttpUrl=$HttpResult.Url
+        HttpStatus=$HttpResult.Status
+        HttpDetails=$HttpResult.Details
+        Status=$status
+        Details=$details
     }
 }
 
@@ -544,7 +600,7 @@ if (-not (Test-Path -LiteralPath $TargetsPath)) { throw "CSV nao encontrado: $Ta
 
 $script:Config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
-$runtime = Join-Path $scriptRoot 'runtime';
+$runtime = Join-Path $scriptRoot 'runtime'
 New-Item -ItemType Directory -Path $runtime -Force | Out-Null
 
 $script:StatePath = Join-Path $runtime 'state.xml'
@@ -573,22 +629,32 @@ foreach ($target in $targets) {
 
     $hostName = ([string]$target.Hostname).Trim()
     $dnsServer = ([string](Get-PropertyValue $target 'DnsServer' '')).Trim()
+    $isIpAddress = Test-IsIpAddress $hostName
     $expected = ConvertTo-StringArray $target.ExpectedIPs
     $retryCount = [int]$script:Config.General.RetryCount
     $dnsResult = $null
 
-    for ($attempt=1; $attempt -le ($retryCount + 1); $attempt++) {
-        $dnsResult = Test-DnsTarget -Hostname $hostName -DnsServer $dnsServer
-        if ((Get-CollectionCount $dnsResult.ResolvedAddresses) -gt 0) { break }
-        if ($attempt -le $retryCount) { 
-            Start-Sleep -Seconds ([int]$script:Config.General.RetryDelaySeconds) 
+    if ($isIpAddress) {
+        $dnsResult = [pscustomobject]@{
+            ResolvedAddresses=@()
+            Ttl=''
+            DnsTimeMs=$null
+            DnsError=''
+        }
+    } else {
+        for ($attempt=1; $attempt -le ($retryCount + 1); $attempt++) {
+            $dnsResult = Test-DnsTarget -Hostname $hostName -DnsServer $dnsServer
+            if ((Get-CollectionCount $dnsResult.ResolvedAddresses) -gt 0) { break }
+            if ($attempt -le $retryCount) {
+                Start-Sleep -Seconds ([int]$script:Config.General.RetryDelaySeconds)
+            }
         }
     }
 
     $comparison = ([string](Get-PropertyValue $target 'ComparisonMode' 'Exact')).Trim()
     $ipOk = $false
 
-    if ((Get-CollectionCount $dnsResult.ResolvedAddresses) -gt 0 -and (Get-CollectionCount $expected) -gt 0) {
+    if (-not $isIpAddress -and (Get-CollectionCount $dnsResult.ResolvedAddresses) -gt 0 -and (Get-CollectionCount $expected) -gt 0) {
         if ($comparison -eq 'Any') { 
             $ipOk = (Get-CollectionCount ($dnsResult.ResolvedAddresses | Where-Object { $expected -contains $_ })) -gt 0 }
         else { 
@@ -600,33 +666,41 @@ foreach ($target in $targets) {
     $port = if ($portText) { [int]$portText } else { 0 }
     $latencyWarningMilliseconds = Get-TargetLatencyWarningMilliseconds $target
     $httpEnabled = ConvertTo-Bool (Get-PropertyValue $target 'http' 'false')
-    $dnsResolved = (Get-CollectionCount $dnsResult.ResolvedAddresses) -gt 0
+    $dnsResolved = $isIpAddress -or (Get-CollectionCount $dnsResult.ResolvedAddresses) -gt 0
     $tcpResult = Test-TcpPort -Hostname $hostName -Port $port -DnsResolved $dnsResolved -LatencyWarningMilliseconds $latencyWarningMilliseconds
     $httpResult = Test-HttpService -Hostname $hostName -Port $port -Enabled $httpEnabled -DnsResolved $dnsResolved
-    $result = New-TargetResult -Target $target -DnsResult $dnsResult -Port $port -IpOk $ipOk -TcpResult $tcpResult -HttpEnabled $httpEnabled -HttpResult $httpResult -LatencyWarningMilliseconds $latencyWarningMilliseconds
+    $result = New-TargetResult -Target $target -DnsResult $dnsResult -DnsTested (-not $isIpAddress) -Port $port -IpOk $ipOk -TcpResult $tcpResult -HttpEnabled $httpEnabled -HttpResult $httpResult -LatencyWarningMilliseconds $latencyWarningMilliseconds
     $result | Export-Csv -LiteralPath $historyPath -Delimiter $script:Config.General.CsvDelimiter -NoTypeInformation -Append -Encoding UTF8
 
-    Write-Log "$($result.Hostname): $($result.Status); obtido=$($result.ResolvedIPs); esperado=$($result.ExpectedIPs); DNS=$($result.DnsTimeMs)ms; TCP=$($result.TcpStatus) $($result.TcpTimeMs)ms; limiteLatencia=$($result.LatencyWarningMilliseconds)ms; HTTP=$($result.HttpStatus) $($result.HttpDetails)"
+    $dnsTime = if ($null -eq $result.DnsTimeMs) { 'nao medido' } else { "$($result.DnsTimeMs)ms" }
+    Write-Log (
+        "$($result.Hostname): $($result.Status); " +
+        "obtido=$($result.ResolvedIPs); esperado=$($result.ExpectedIPs); " +
+        "DNS=$($result.DnsStatus) $dnsTime; TCP=$($result.TcpStatus) $($result.TcpTimeMs)ms; " +
+        "limiteLatencia=$($result.LatencyWarningMilliseconds)ms; " + 
+        "HTTP=$($result.HttpStatus) $($result.HttpDetails)"
+    )
 
     $key = $result.Hostname.ToLowerInvariant()
 
     if (-not $script:State.ContainsKey($key)) { 
         $script:State[$key] = @{ 
-            Status=$script:Status['Unknown']; 
-            ConsecutiveFailures=0; 
+            Status=$script:Status['Unknown']
+            ConsecutiveFailures=0
             LastAlert=$null 
         } 
     }
 
-    $s = $script:State[$key]; $oldStatus=[string]$s.Status
+    $s = $script:State[$key]
+    $oldStatus=[string]$s.Status
 
     if ($result.Status -eq $script:Status['Ok']) {
         if ($oldStatus -ne $script:Status['Ok'] -and $oldStatus -ne $script:Status['Unknown']) {
             Send-Notification -Kind $script:Kind['Recovery'] -Result $result -Recipients (ConvertTo-StringArray (Get-PropertyValue $target 'ResponsibleEmails' ''))
         }
 
-        $s.Status=$script:Status['Ok']; 
-        $s.ConsecutiveFailures=0; 
+        $s.Status=$script:Status['Ok']
+        $s.ConsecutiveFailures=0
         $s.LastSuccess=(Get-Date).ToString('o')
 
     } else {
@@ -644,7 +718,8 @@ foreach ($target in $targets) {
             $s.LastAlert=(Get-Date).ToString('o')
         }
 
-        $s.Status=$result.Status; $s.LastFailure=(Get-Date).ToString('o')
+        $s.Status=$result.Status
+        $s.LastFailure=(Get-Date).ToString('o')
     }
     
     Save-State
