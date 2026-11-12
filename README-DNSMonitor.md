@@ -1,6 +1,6 @@
 # Monitor DNS em PowerShell
 
-## Configuração (`config.json`)
+## Configuração do monitor (`config.json`)
 
 O arquivo `config.json` deve ficar na mesma pasta que `Monitor-DNS.ps1`. Por padrão, o script carrega esse arquivo automaticamente. Para usar outro caminho, passe `-ConfigPath`, por exemplo:
 
@@ -49,6 +49,23 @@ Configura as notificações por e-mail:
 | `DefaultRecipients` | Lista de destinatários incluídos em todos os alertas, além dos endereços configurados por alvo no CSV. | Use uma lista JSON de endereços, por exemplo `["operacao@exemplo.com","plantao@exemplo.com"]`. |
 | `CredentialFile` | Arquivo CLIXML com a credencial SMTP. | Informe o nome ou caminho relativo à pasta do script. Gere o arquivo com `.\New-SmtpCredential.ps1` usando a mesma conta do Windows que executará o monitor; a credencial CLIXML é protegida para essa conta e computador. Não compartilhe nem versiona esse arquivo. |
 
+## Configuração dos endpoints (`DNSMonitor.csv`)
+
+O arquivo `DNSMonitor.csv` define quais endpoints o monitor acompanha e quais validações e notificações se aplicam a cada um. Cada linha configura um alvo de forma independente: é possível habilitar ou desabilitar destinos, escolher o servidor DNS e a comparação de IPs, ajustar porta e limite de latência, ativar o teste HTTP e indicar equipe e responsáveis. Assim, serviços com requisitos diferentes podem ser monitorados no mesmo arquivo sem alterar o script. Use o delimitador configurado em `General.CsvDelimiter` no `config.json` (o arquivo distribuído usa `;`).
+
+| Coluna | O que é e para que serve | Como configurar |
+|---|---|---|
+| `Enabled` | Ativa ou ignora a linha do endpoint. | Use `true` para monitorar ou `false` para ignorar. Se a coluna não existir ou estiver vazia, o padrão é `true`. |
+| `Hostname` | Nome DNS ou endereço IP usado como destino dos testes. | Informe um hostname ou IPv4/IPv6. Quando informar um IP, a consulta DNS e a comparação com `ExpectedIPs` não são feitas; TCP e HTTP continuam usando esse IP como destino. |
+| `ExpectedIPs` | Endereço(s) IP esperado(s) na resolução DNS do hostname. | Informe um ou mais IPs separados por `|`, por exemplo `192.0.2.10|192.0.2.11`. Usado conforme `ComparisonMode`; não se aplica quando `Hostname` já é um IP. |
+| `DnsServer` | Servidor DNS consultado para resolver o hostname. | Informe o endereço ou nome do servidor DNS. Deixe vazio para usar o resolvedor padrão do sistema. |
+| `ComparisonMode` | Define como comparar os endereços resolvidos com `ExpectedIPs`. | Use `Exact` para exigir conjuntos idênticos ou `Any` para aceitar quando pelo menos um IP coincidir. O padrão é `Exact`. |
+| `Port` | Porta usada no teste TCP e, se HTTP estiver habilitado, na requisição HTTP(S). | Informe um número de porta, como `443` ou `587`. Deixe vazio ou use `0` para não executar o teste TCP; no HTTP serão usadas as portas padrão do protocolo. |
+| `http` | Ativa ou desativa a verificação HTTP(S). | Use `true` ou `false`. Quando habilitado, tenta HTTPS e depois HTTP na raiz do endpoint. |
+| `LatencyWarningMilliseconds` | Limite de latência específico do endpoint para classificar DNS ou TCP como lento. | Informe um número não negativo em milissegundos. Vazio ou coluna ausente usa `General.LatencyWarningMilliseconds` do `config.json`. |
+| `ResponsibleEmails` | Destinatários específicos deste endpoint para alertas e recuperações. | Informe um ou mais endereços separados por `|`. Os destinatários padrão de `Email.DefaultRecipients` continuam incluídos. |
+| `Team` | Equipe responsável pelo endpoint, exibida nos alertas e no histórico. | Informe o nome da equipe; pode ficar vazio se não for necessário. |
+
 ## Teste local sem alertas
 1. Coloque os arquivos na mesma pasta.
 2. Edite `DNSMonitor.csv`. Para vários IPs ou e-mails no mesmo campo, separe os valores com `|`.
@@ -76,6 +93,9 @@ Observação: `Send-MailMessage` é usado pela ampla compatibilidade local. Conf
 - Execute o número de vezes definido em `General.FailuresBeforeAlert` (atualmente `1`).
 - Restaure o IP correto e execute novamente para testar a recuperação.
 - Use `-WhatIfAlerts` para não enviar mensagens reais.
+
+## Alvo informado como IP
+Se `Hostname` no CSV for um endereço IPv4 ou IPv6, a consulta DNS e a comparação com `ExpectedIPs` não são executadas. O alerta registra o fato `StatusDNS` e o histórico registra `DnsStatus` como `NAO_TESTADO`; os testes TCP e HTTP continuam usando o endereço IP diretamente como destino.
 
 ## Comparação
 - `Exact`: o conjunto resolvido deve ser exatamente igual ao esperado.
