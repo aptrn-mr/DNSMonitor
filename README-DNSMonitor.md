@@ -115,6 +115,8 @@ true;mail.exemplo.com;192.0.2.20;;Exact;587;operacao@exemplo.com;Infraestrutura;
 
 Um valor informado na linha é usado para classificar tanto o tempo de resolução DNS (`DNS_LENTO`) quanto o estabelecimento TCP (`TCP_LENTO`). Se a coluna não existir ou o campo estiver vazio, o monitor usa `General.LatencyWarningMilliseconds` do `config.json`. O limite deve ser um número não negativo em milissegundos; valores inválidos interrompem o processamento com erro. O valor efetivamente aplicado fica registrado no histórico e no log.
 
+Quando o DNS ou TCP ultrapassa esse limite, o monitor envia uma notificação com severidade `AVISO`. Lentidão isolada não incrementa falhas nem altera o estado usado para alertas de falha e recuperação; falhas reais de DNS, TCP ou HTTP continuam seguindo o fluxo normal de falha.
+
 O tempo TCP registrado é o intervalo medido pela aplicação desde o início de `ConnectAsync` até a conclusão ou timeout da conexão. A medição usa um cronômetro de alta resolução e não inclui a criação do cliente TCP nem a execução anterior do script; ainda pode incluir uma pequena latência de agendamento do sistema operacional, portanto não representa uma medição de pacotes em nível de rede.
 
 ## Agendamento

@@ -19,12 +19,14 @@ Set-Variable -Name Log -Scope Script -Option ReadOnly
 $severityValues = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)
 $severityValues.Add('Ok', 'OK')
 $severityValues.Add('Critical', 'CRITICO')
+$severityValues.Add('Warning', 'AVISO')
 $script:Severity = [Collections.ObjectModel.ReadOnlyDictionary[string,string]]::new($severityValues)
 Set-Variable -Name Severity -Scope Script -Option ReadOnly
 
 $kindValues = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)
 $kindValues.Add('Recovery', 'RECUPERACAO')
 $kindValues.Add('Failure', 'FALHA')
+$kindValues.Add('Warning', 'AVISO')
 $script:Kind = [Collections.ObjectModel.ReadOnlyDictionary[string,string]]::new($kindValues)
 Set-Variable -Name Kind -Scope Script -Option ReadOnly
 
@@ -181,7 +183,11 @@ function Send-TeamsAlert {
                         }
                     }
             )
-            $severityColor = if ($Severity -eq $script:Severity['Critical']) { 'Attention' } else { 'Good' }
+            $severityColor = switch ($Severity) {
+                $script:Severity['Critical'] { 'Attention'; break }
+                $script:Severity['Warning'] { 'Warning'; break }
+                default { 'Good' }
+            }
             $payload = [ordered]@{
                 '$schema' = 'http://adaptivecards.io/schemas/adaptive-card.json'
                 type = 'AdaptiveCard'
@@ -269,8 +275,9 @@ function Send-Notification {
     param([string]$Kind,[object]$Result,[string[]]$Recipients)
 
     $isRecovery = $Kind -eq $script:Kind['Recovery']
-    $severity = if ($isRecovery) { $script:Severity['Ok'] } else { $script:Severity['Critical'] }
-    $title = if ($isRecovery) { "DNS RECUPERADO: $($Result.Hostname)" } else { "ALERTA DNS: $($Result.Hostname)" }
+    $isWarning = $Kind -eq $script:Kind['Warning']
+    $severity = if ($isRecovery) { $script:Severity['Ok'] } elseif ($isWarning) { $script:Severity['Warning'] } else { $script:Severity['Critical'] }
+    $title = if ($isRecovery) { "DNS RECUPERADO: $($Result.Hostname)" } elseif ($isWarning) { "AVISO DNS: $($Result.Hostname)" } else { "ALERTA DNS: $($Result.Hostname)" }
     $message = if ($isRecovery) { 'O alvo voltou ao estado normal.' } else { $Result.Details }
 
     $facts = [ordered]@{
@@ -436,7 +443,6 @@ function Test-TcpPort {
             if ($null -ne $client) { $client.Dispose() }
         }
         if ($success -and $elapsedMilliseconds -gt $LatencyWarningMilliseconds) {
-            $success = $false
             $status = $script:Status['Slow']
             $details = "Latencia TCP de $elapsedMilliseconds ms excede o limite de $LatencyWarningMilliseconds ms."
         }
@@ -545,10 +551,6 @@ function New-TargetResult {
         $status=$script:Status['IpMismatch']
         $details='O conjunto de IPs obtido diverge do baseline.' 
     }
-    elseif ($TcpResult.Status -eq $script:Status['Slow']) { 
-        $status=$script:Status['TcpSlow']
-        $details=$TcpResult.Details 
-    }
     elseif (-not $TcpResult.Success) { 
         $status=$script:Status['TcpFailure']
         $details="O DNS esta correto, mas a conexao TCP na porta $Port falhou. $($TcpResult.Details)" 
@@ -556,6 +558,10 @@ function New-TargetResult {
     elseif (-not $HttpResult.Success) { 
         $status=$script:Status['HttpFailure']
         $details="O servico HTTP nao respondeu corretamente: $($HttpResult.Details)" 
+    }
+    elseif ($TcpResult.Status -eq $script:Status['Slow']) {
+        $status=$script:Status['TcpSlow']
+        $details=$TcpResult.Details
     }
     elseif ($DnsTested -and $DnsResult.DnsTimeMs -gt $LatencyWarningMilliseconds) {
         $status=$script:Status['DnsSlow']
@@ -680,6 +686,11 @@ foreach ($target in $targets) {
         "limiteLatencia=$($result.LatencyWarningMilliseconds)ms; " + 
         "HTTP=$($result.HttpStatus) $($result.HttpDetails)"
     )
+
+    if ($result.Status -eq $script:Status['DnsSlow'] -or $result.Status -eq $script:Status['TcpSlow']) {
+        Send-Notification -Kind $script:Kind['Warning'] -Result $result -Recipients (ConvertTo-StringArray (Get-PropertyValue $target 'ResponsibleEmails' ''))
+        continue
+    }
 
     $key = $result.Hostname.ToLowerInvariant()
 
